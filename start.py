@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 import random
-
-#TODO: colored mazes (news.ycombinator.com)
+from re import match
 
 #Clockwise:
 DIRECTIONS = (
@@ -14,6 +13,35 @@ DIRECTIONS = (
         (-1, 0),
         (-1, 1)
         )
+
+RULES = {
+        # Creates nice cavern-like organic shapes:
+        'Vote': '45678/5678',
+        'Vote 4/5': '35678/4678',
+        # Creates mazes:
+        'Maze': '12345/3',
+        # Like above, walls tend to be longer:
+        'Mazecetric': '1234/3',
+        # The remaining rules are mostly for fun:
+        'Game of Life': '23/2',
+        'Gnarl': '1/1',
+        'Replicator': '1357/1357',
+        'Coral': '45678/3',#
+        'Assimilation': '4567/345',
+        'Diamoeba': '5678/35678',#
+        '2x2': '125/36',
+        'Move': '245/368',
+        'Stains': '235678/3678',
+        'Day & Night': '34678/3678',#
+        'Coagulations': '235678/378',
+        'Walled Cities': '2345/45678',
+        'Fredkin': '02468/1357',
+        'Seeds': '/2',
+        'Live Free or Die': '0/2',
+        'Amoeba': '1358/357',#
+        'Life Without Death': '012345678/3',
+        'Serviettes': '/234',
+        }
 
 def chessboard_distance(point1, point2):
     return max(abs(point1[0] - point2[0]), abs(point1[1] - point2[1]))
@@ -75,7 +103,7 @@ def generate_depth_first(board):
     while stack:
         curr = stack.pop()
         neighbors = list(board.neighbors(curr, value='#'))
-        neighbors = [nei for nei in neighbors if len(board.neighbors(nei, value='.')) <= 2]
+        neighbors = [nei for nei in neighbors if len(board.neighbors(nei, value='.')) <= 1]
         if neighbors:
             adjac = random.choice(neighbors)
             stack.append(curr)
@@ -85,7 +113,6 @@ def generate_depth_first(board):
 def generate_prim(board):
     for field in board.fields:
         board.fields[field] = '#'
-
 
     in_cells = set()
     frontier_cells = set()
@@ -117,59 +144,51 @@ def generate_prim(board):
                 frontier_cells.add(nei)
 
 
-def generate_cellullar_caves(board, reps=3, radius=1, edges='#'):
-    for c in board.fields:
-        board.fields[c] = '#' if random.random() <= 0.50 else '.'
+def cellular_automata(board, rulestring, reps=1, edges=' '):
+    numbers = '0?1?2?3?4?5?6?7?8?'
+    pattern = '({0}/{0}|S{0}/B{0}|B{0}/S{0})'.format(numbers)
+    if not match(pattern, rulestring):
+        print('Bad rulestring. The following formats are accepted:')
+        print('23/2')
+        print('S23/B2')
+        print('B17/S12')
 
-    #TODO: 4/8/6 directions
+    if 'S' not in rulestring:
+        survival, birth = rulestring.split('/')
+    elif rulestring.startswith('S'):
+        survival, birth = rulestring.strip('/')
+    elif rulestring.startswith('B'):
+        birth, survival = rulestring.strip('/')
+    survival = tuple(int(letter) for letter in survival.strip('S'))
+    birth = tuple(int(letter) for letter in birth.strip('B'))
+
+    for c in board.fields:
+        board.fields[c] = '#' if random.random() <= 0.50 else ' '
+
     for i in range(reps):
         print('Generation ', i+1)
         board.display()
-        before = (sum(1 for field in board.fields.values() if field == '#'))
-        last_generation = board.fields.copy()
-
-        allcells = [coords for coords in last_generation]
-        for c in allcells:
-            ball = board.ball(c, radius=radius)
-            walls = sum(1 for b in ball if last_generation[b] == '#')
-            expected_fields = pow(2 * radius + 1, 2)
-            # Handle edges
-            if edges == '#':
-                walls += expected_fields - len(ball)
-            board.fields[c] = '#' if walls >= expected_fields // 2 + 1 else '.'
-        after = (sum(1 for field in board.fields.values() if field == '#'))
-        # Progress ?
-        if before == after:
-            break
-
-
-def game_of_life(board, reps=1):
-    for c in board.fields:
-        board.fields[c] = '#' if random.random() <= 0.20 else ' '
-    for i in range(reps):
-        print('Generation ', i+1)
-        board.display()
-        before = board.fields.copy() 
         last_generation = board.fields.copy()
         for coords in last_generation:
-            nearby = len(board.neighbors(coords, value='#'))
+            nearby = board.neighbors(coords)
+            missing_fields = 8 - len(nearby)
+            nearby = sum(1 for n in nearby if last_generation[n] == '#')
+            if edges == '#':
+                nearby += missing_fields
             if last_generation[coords] == '#':
-                if not 1 < nearby < 4:
+                if nearby not in survival:
                     board.fields[coords] = ' '
             elif last_generation[coords] == ' ':
-                if nearby == 3:
+                if nearby in birth:
                     board.fields[coords] = '#'
-        after = board.fields.copy() 
-        # Progress ?
-        if before == after:
-            break
 
+        # Progress ?
+        if last_generation == board.fields:
+            break
 
 board = Board((51, 51))
 #generate_depth_first(board)
 #generate_prim(board)
 
-generate_cellullar_caves(board, edges='.', reps=8, radius=1)
-#game_of_life(board, reps=50)
+cellular_automata(board, rulestring=RULES['Vote'], edges=' ', reps=5)
 
-#board.display()

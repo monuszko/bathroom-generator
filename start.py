@@ -14,6 +14,9 @@ DIRECTIONS = (
         (-1, 1)
         )
 
+FLOOR = '.'
+WALL = '#'
+
 RULES = {
         # Creates nice cavern-like organic shapes:
         'Vote': '45678/5678',
@@ -56,7 +59,7 @@ class Board:
         if dimensions:
             for x in range(dimensions[0]):
                 for y in range(dimensions[1]):
-                    self.fields[x, y] = '#'
+                    self.fields[x, y] = WALL
             self.width = dimensions[0]
             self.height = dimensions[1]
 
@@ -102,17 +105,17 @@ def generate_depth_first(board):
 
     while stack:
         curr = stack.pop()
-        neighbors = list(board.neighbors(curr, value='#'))
-        neighbors = [nei for nei in neighbors if len(board.neighbors(nei, value='.')) <= 1]
+        neighbors = list(board.neighbors(curr, value=WALL))
+        neighbors = [nei for nei in neighbors if len(board.neighbors(nei, value=FLOOR)) <= 1]
         if neighbors:
             adjac = random.choice(neighbors)
             stack.append(curr)
             stack.append(adjac)
-            board.fields[adjac] = '.'
+            board.fields[adjac] = FLOOR
 
 def generate_prim(board):
     for field in board.fields:
-        board.fields[field] = '#'
+        board.fields[field] = WALL
 
     in_cells = set()
     frontier_cells = set()
@@ -134,7 +137,7 @@ def generate_prim(board):
                 frontier_cells.remove(cell)
                 break
         in_cells.add(cell)
-        board.fields[cell] = '.'
+        board.fields[cell] = FLOOR
         for nei in board.neighbors(cell):
             if nei in frontier_cells:
                 frontier_cells.remove(nei)
@@ -144,7 +147,7 @@ def generate_prim(board):
                 frontier_cells.add(nei)
 
 
-def cellular_automata(board, rulestring, reps=1, edges=' '):
+def cellular_automata(board, rulestring, reps=1, edges=FLOOR):
     numbers = '0?1?2?3?4?5?6?7?8?'
     pattern = '({0}/{0}|S{0}/B{0}|B{0}/S{0})'.format(numbers)
     if not match(pattern, rulestring):
@@ -163,7 +166,7 @@ def cellular_automata(board, rulestring, reps=1, edges=' '):
     birth = tuple(int(letter) for letter in birth.strip('B'))
 
     for c in board.fields:
-        board.fields[c] = '#' if random.random() <= 0.50 else ' '
+        board.fields[c] = WALL if random.random() <= 0.50 else FLOOR
 
     for i in range(reps):
         print('Generation ', i+1)
@@ -172,15 +175,15 @@ def cellular_automata(board, rulestring, reps=1, edges=' '):
         for coords in last_generation:
             nearby = board.neighbors(coords)
             missing_fields = 8 - len(nearby)
-            nearby = sum(1 for n in nearby if last_generation[n] == '#')
-            if edges == '#':
+            nearby = sum(1 for n in nearby if last_generation[n] == WALL)
+            if edges == WALL:
                 nearby += missing_fields
-            if last_generation[coords] == '#':
+            if last_generation[coords] == WALL:
                 if nearby not in survival:
-                    board.fields[coords] = ' '
-            elif last_generation[coords] == ' ':
+                    board.fields[coords] = FLOOR
+            elif last_generation[coords] == FLOOR:
                 if nearby in birth:
-                    board.fields[coords] = '#'
+                    board.fields[coords] = WALL
 
         # Progress ?
         if last_generation == board.fields:
@@ -190,5 +193,5 @@ board = Board((51, 51))
 #generate_depth_first(board)
 #generate_prim(board)
 
-cellular_automata(board, rulestring=RULES['Vote'], edges=' ', reps=5)
+cellular_automata(board, rulestring=RULES['Vote'], edges=FLOOR, reps=5)
 

@@ -50,6 +50,59 @@ def chessboard_distance(point1, point2):
     return max(abs(point1[0] - point2[0]), abs(point1[1] - point2[1]))
 
 
+class DisjointSets:
+    '''
+    Represents multiple disjoint sets. Has two highly efficient operations:
+    - find: which set does this field belong to ?
+    - union: combines two sets
+    Sets are identified by an arbitrarily chosen 'representative' field.
+    '''
+
+    def __init__(self, sequence_of_coords):
+        '''
+        Initialize with a sequence of field coordinates.
+        Each field starts in its own set.
+        '''
+        sequence_of_coords = list(sequence_of_coords)
+        self.rank = {coords: 0 for coords in sequence_of_coords}
+        self.parent = {coords: coords for coords in sequence_of_coords}
+    
+    def find(self, coords):
+        '''
+        Return the identifier of the set the field belongs to.
+        '''
+        if self.parent[coords] == coords:
+            return coords
+
+        result = self.find(self.parent[coords])
+        # path compression
+        # caching to limit tree depth:
+        self.parent[coords] = result
+        return result
+
+    def union(self, coords1, coords2):
+        '''
+        Combine two disjoint sets containing coords1 and coords2.
+        '''
+        root1 = self.find(coords1)
+        root2 = self.find(coords2)
+        rank1 = self.rank[root1]
+        rank2 = self.rank[root2]
+        # Are they in the same set already ?
+        if root1 == root2:
+            return
+
+        # union by rank
+        # join the shallower tree to the deeper one, to limit depth:
+        if rank1 < rank2:
+            self.parent[root1] = root2
+        elif rank1 > rank2:
+            self.parent[root2] = root1
+        else:
+            self.parent[root1] = root2
+            self.rank[root1] += 1
+
+
 class Board:
     def __init__(self, dimensions=None):
         """
@@ -97,7 +150,6 @@ class Board:
         return edges
 
 
-
 def generate_depth_first(board):
     exit = random.choice(board.edges()) 
 
@@ -125,7 +177,7 @@ def generate_prim(board):
         if nr == index:
             break
     in_cells.add(cell)
-    board.fields[cell] = '@'
+    board.fields[cell] = FLOOR
     for nei in board.neighbors(cell):
         out_cells.remove(nei)
         frontier_cells.add(nei)
@@ -146,6 +198,29 @@ def generate_prim(board):
                 out_cells.remove(nei)
                 frontier_cells.add(nei)
 
+
+def generate_kruskal(board):
+    for field in board.fields:
+        board.fields[field] = WALL
+
+    allcells = list(board.fields.keys())
+    random.shuffle(allcells)
+    sets = DisjointSets(allcells)
+    for cell in allcells:
+        adjacent_spaces = board.neighbors(cell, value=FLOOR)
+        # If carving this cell would join two cells of the same area, skip
+        unique_sets = {sets.find(space) for space in adjacent_spaces}
+        if len(unique_sets) < len(adjacent_spaces):
+            continue
+        board.fields[cell] = FLOOR
+        unique_sets.add(sets.find(cell))
+        while len(unique_sets) > 1:
+            set1 = unique_sets.pop()
+            set2 = unique_sets.pop()
+            sets.union(set1, set2)
+            unique_sets.add(sets.find(set1))
+    board.display()
+    
 
 def cellular_automata(board, rulestring, reps=1, edges=FLOOR):
     numbers = '0?1?2?3?4?5?6?7?8?'
@@ -188,10 +263,4 @@ def cellular_automata(board, rulestring, reps=1, edges=FLOOR):
         # Progress ?
         if last_generation == board.fields:
             break
-
-board = Board((51, 51))
-#generate_depth_first(board)
-#generate_prim(board)
-
-cellular_automata(board, rulestring=RULES['Vote'], edges=FLOOR, reps=5)
 

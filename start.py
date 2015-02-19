@@ -222,6 +222,36 @@ def generate_kruskal(board):
     board.display()
     
 
+def generate_division(board, min_x, max_x, min_y, max_y):
+    width, height = abs(min_x - max_x), abs(min_y - max_y)
+    if width < 2 and height < 2:
+        return
+
+    if width > height:
+        wall = 'vertical'
+    elif width < height:
+        wall = 'horizontal'
+    else:
+        wall = 'vertical' if random.random() > 0.5 else 'horizontal'
+
+    if wall == 'vertical':
+        wall_x = random.randrange(min_x, max_x) // 2 * 2 + 1
+        for wall_y in range(min_y, max_y + 1):
+            board.fields[wall_x, wall_y] = WALL
+        hole_y = random.randrange(min_y, max_y + 2) // 2 * 2
+        board.fields[wall_x, hole_y] = FLOOR
+        generate_division(board, min_x, wall_x-1, min_y, max_y)
+        generate_division(board, wall_x+1, max_x, min_y, max_y)
+    else:
+        wall_y = random.randrange(min_y, max_y) // 2 * 2 + 1
+        for wall_x in range(min_x, max_x + 1):
+            board.fields[wall_x, wall_y] = WALL
+        hole_x = random.randrange(min_x, max_x + 2) // 2 * 2
+        board.fields[hole_x, wall_y] = FLOOR
+        generate_division(board, min_x, max_x, min_y, wall_y-1)
+        generate_division(board, min_x, max_x, wall_y+1, max_y)
+
+
 def cellular_automata(board, rulestring, reps=1, edges=FLOOR):
     numbers = '0?1?2?3?4?5?6?7?8?'
     pattern = '({0}/{0}|S{0}/B{0}|B{0}/S{0})'.format(numbers)

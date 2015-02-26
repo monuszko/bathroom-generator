@@ -14,6 +14,13 @@ DIRECTIONS = (
         (-1, 1)
         )
 
+DIRECTIONS_4 = (
+        (0, 1),
+        (1, 0),
+        (0, -1),
+        (-1, 0),
+        )
+
 FLOOR = '.'
 WALL = '#'
 
@@ -104,34 +111,89 @@ class DisjointSets:
 
 
 class Board:
-    def __init__(self, dimensions=None):
+    def __init__(self, fields=None, dimensions=None):
         """
         dimensions - (width, length)
         """
+        #TODO: remove this once unit tests are in place
+        assert fields or dimensions
         self.fields = {}
         if dimensions:
             for x in range(dimensions[0]):
                 for y in range(dimensions[1]):
                     self.fields[x, y] = WALL
-            self.width = dimensions[0]
-            self.height = dimensions[1]
+            self.min_x, self.max_x = 0, dimensions[0] - 1
+            self.min_y, self.max_y = 0, dimensions[1] - 1
+        elif fields:
+            self.absorb(fields)
+
+    def __len__(self):
+        return len(self.fields)
+
+    def width(self):
+        return abs(self.max_x - self.min_x)
+
+    def height(self):
+        return abs(self.max_y - self.min_y)
+
+    def absorb(self, fields):
+        for coords in fields:
+            self.fields[coords] = FLOOR
+        self.min_x = min(co[0] for co in fields)
+        self.max_x = max(co[0] for co in fields)
+        self.min_y = min(co[1] for co in fields)
+        self.max_y = max(co[1] for co in fields)
 
     def display(self):
-        for y in range(self.height):
-            for x in range(self.width):
+        for y in range(self.height() + 1):
+            for x in range(self.width() + 1):
                 print(self.fields[x, y], end='')
             print()
 
-    def neighbors(self, coords, value=None):
-        neighbors = {}
-        for di in DIRECTIONS:
+    def partition(self, how, oddwalls=False):
+        '''
+        Similar to .partition(before, sep, after) of strings.
+        Returns Area before the separation line, the line, and area after.
+        How - 'vertical' or '|' ; 'horizontal' or '-'
+        at - this means x for vertical or y for horizontal
+        '''
+        first = []
+        middle = []
+        second = []
+
+        if how in ('horizontal', '-'):
+            coordinate_index = 1
+            if not oddwalls:
+                at = random.randint(self.min_y + 1, self.max_y - 1)
+            else:
+                at = random.choice(list(range(self.min_y, self.max_y)[1::2]))
+        elif how in ('vertical', '|'):
+            coordinate_index = 0
+            if not oddwalls:
+                at = random.randint(self.min_x + 1, self.max_x - 1)
+            else:
+                at = random.choice(list(range(self.min_x, self.max_x)[1::2]))
+
+        for field in self.fields:
+            if field[coordinate_index] < at:
+                first.append(field)
+            elif field[coordinate_index] > at:
+                second.append(field)
+            else:
+                middle.append(field)
+
+        return Board(fields=first), Board(fields=middle), Board(fields=second)
+
+    def neighbors(self, coords, value=None, dirs=DIRECTIONS):
+        neighbors = set()
+        for di in dirs:
             adjacent_coords = (coords[0] + di[0], coords[1] + di[1])
             neigh = self.fields.get(adjacent_coords, None)
             if neigh:
                 if not value:
-                    neighbors[adjacent_coords] = neigh
+                    neighbors.add(adjacent_coords)
                 elif value == neigh:
-                    neighbors[adjacent_coords] = neigh
+                    neighbors.add(adjacent_coords)
         return neighbors 
 
     def ball(self, coords, radius=1):
@@ -142,11 +204,11 @@ class Board:
         return result
 
     def edges(self):
-        edges = []
+        edges = set()
         for coords in self.fields:
             numdirs = len(DIRECTIONS)
             if len(self.neighbors(coords)) < numdirs:
-                edges.append(coords)
+                edges.add(coords)
         return edges
 
 
@@ -250,6 +312,42 @@ def generate_division(board, min_x, max_x, min_y, max_y):
         board.fields[hole_x, wall_y] = FLOOR
         generate_division(board, min_x, max_x, min_y, wall_y-1)
         generate_division(board, min_x, max_x, wall_y+1, max_y)
+
+def generate_division2(area, oddwalls=True, gates=True):
+    '''
+    Generate a maze using perfect division.
+
+    Arguments:
+    oddwalls - place walls only in odd cells(relative to area)? Default is True
+    gates - put gates in walls ? Default is True
+    '''
+    max_room = 1
+    areas = [area]
+    walls = []
+    while areas:
+        area = areas.pop()
+        if area.width() <= max_room and area.height() <= max_room:
+            continue
+        if area.width() > area.height():
+            how = '|'
+        elif area.width() < area.height():
+            how = '-'
+        else:
+            how = random.choice(['-', '|'])
+
+        firsthalf, wall, secondhalf = area.partition(how, oddwalls)
+        for field in wall.fields:
+            board.fields[field] = WALL
+        walls.append(wall)
+        areas.append(firsthalf)
+        areas.append(secondhalf)
+
+    if gates:
+        for wall in walls:
+            fields = wall.fields.keys()
+            holes = [field for field in fields if len(
+                board.neighbors(field, value=WALL, dirs=DIRECTIONS_4)) < 3]
+            board.fields[random.choice(holes)] = FLOOR
 
 
 def cellular_automata(board, rulestring, reps=1, edges=FLOOR):

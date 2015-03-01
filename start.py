@@ -110,7 +110,7 @@ class DisjointSets:
             self.rank[root1] += 1
 
 
-class Board:
+class Area:
     def __init__(self, fields=None, dimensions=None):
         """
         dimensions - (width, length)
@@ -131,10 +131,14 @@ class Board:
         return len(self.fields)
 
     def width(self):
-        return abs(self.max_x - self.min_x)
+        if len(self) == 0:
+            return 0
+        return abs(self.min_x - self.max_x) + 1
 
     def height(self):
-        return abs(self.max_y - self.min_y)
+        if len(self) == 0:
+            return 0
+        return abs(self.min_y - self.max_y) + 1
 
     def absorb(self, fields):
         for coords in fields:
@@ -145,14 +149,14 @@ class Board:
         self.max_y = max(co[1] for co in fields)
 
     def display(self):
-        for y in range(self.height() + 1):
-            for x in range(self.width() + 1):
+        for y in range(self.height()):
+            for x in range(self.width()):
                 print(self.fields[x, y], end='')
             print()
 
-    def partition(self, how, oddwalls=False):
+    def partition(self, how, oddwalls=True, min_len=1):
         '''
-        Similar to .partition(before, sep, after) of strings.
+        Similar to string.partition(before, sep, after) 
         Returns Area before the separation line, the line, and area after.
         How - 'vertical' or '|' ; 'horizontal' or '-'
         at - this means x for vertical or y for horizontal
@@ -161,28 +165,28 @@ class Board:
         middle = []
         second = []
 
+        step = 2 if oddwalls else 1
+        odd = 1 if min_len % 2 == 0 and oddwalls else 0
         if how in ('horizontal', '-'):
             coordinate_index = 1
-            if not oddwalls:
-                at = random.randint(self.min_y + 1, self.max_y - 1)
-            else:
-                at = random.choice(list(range(self.min_y, self.max_y)[1::2]))
+            splits = list(range(self.min_y + odd, self.max_y + 1))
         elif how in ('vertical', '|'):
             coordinate_index = 0
-            if not oddwalls:
-                at = random.randint(self.min_x + 1, self.max_x - 1)
-            else:
-                at = random.choice(list(range(self.min_x, self.max_x)[1::2]))
+            splits = list(range(self.min_x + odd, self.max_x + 1))
+
+        splits = splits[min_len:-min_len:step]
+        split = random.choice(splits)
 
         for field in self.fields:
-            if field[coordinate_index] < at:
+            if field[coordinate_index] < split:
                 first.append(field)
-            elif field[coordinate_index] > at:
+            elif field[coordinate_index] > split:
                 second.append(field)
             else:
                 middle.append(field)
 
-        return Board(fields=first), Board(fields=middle), Board(fields=second)
+        return Area(fields=first), Area(fields=middle), Area(fields=second)
+
 
     def neighbors(self, coords, value=None, dirs=DIRECTIONS):
         neighbors = set()
@@ -313,7 +317,7 @@ def generate_division(board, min_x, max_x, min_y, max_y):
         generate_division(board, min_x, max_x, min_y, wall_y-1)
         generate_division(board, min_x, max_x, wall_y+1, max_y)
 
-def generate_division2(area, oddwalls=True, gates=True):
+def generate_division2(area, oddwalls=True, min_room=1, max_room=1, gates=True):
     '''
     Generate a maze using perfect division.
 
@@ -321,13 +325,19 @@ def generate_division2(area, oddwalls=True, gates=True):
     oddwalls - place walls only in odd cells(relative to area)? Default is True
     gates - put gates in walls ? Default is True
     '''
-    max_room = 1
+
+    #TODO: make bulletproof
+    assert min_room <= max_room
     areas = [area]
     walls = []
     while areas:
         area = areas.pop()
         if area.width() <= max_room and area.height() <= max_room:
             continue
+        splittable = min_room * 2 + 1
+        if area.width() < splittable and area.height() < splittable:
+            continue
+
         if area.width() > area.height():
             how = '|'
         elif area.width() < area.height():
@@ -335,12 +345,12 @@ def generate_division2(area, oddwalls=True, gates=True):
         else:
             how = random.choice(['-', '|'])
 
-        firsthalf, wall, secondhalf = area.partition(how, oddwalls)
+        first, wall, second = area.partition(how, oddwalls, min_len=min_room)
         for field in wall.fields:
             board.fields[field] = WALL
         walls.append(wall)
-        areas.append(firsthalf)
-        areas.append(secondhalf)
+        areas.append(first)
+        areas.append(second)
 
     if gates:
         for wall in walls:
